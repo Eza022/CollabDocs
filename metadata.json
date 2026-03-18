@@ -1,0 +1,5 @@
+{
+  "name": "CollabDocs Lite",
+  "description": "A real-time collaborative document editor with live synchronization.",
+  "requestFramePermissions": []
+}
