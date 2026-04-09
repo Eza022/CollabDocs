@@ -3,6 +3,11 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import { createServer as createViteServer } from "vite";
 import path from "path";
+import dotenv from "dotenv";
+import { GoogleGenAI } from "@google/genai";
+
+dotenv.config();
+const ai = process.env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }) : null;
 
 async function startServer() {
   const app = express();
@@ -57,6 +62,29 @@ async function startServer() {
 
     socket.on("typing", ({ documentId, isTyping }: { documentId: string; isTyping: boolean }) => {
       socket.to(documentId).emit("user-typing", isTyping);
+    });
+
+    socket.on("ai-autocomplete", async ({ documentId, content }: { documentId: string; content: string }) => {
+      if (!ai) return;
+      try {
+        io.to(documentId).emit("ai-typing", true);
+        const prompt = `Continue the following document text naturally and seamlessly. Only provide the continuation, nothing else. Do not repeat the existing text. Keep it concise.\n\nText:\n${content}\n\nContinuation:`;
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+        });
+        
+        if (response.text) {
+            // Append generated text
+            const newContent = documents[documentId] + response.text;
+            documents[documentId] = newContent;
+            io.to(documentId).emit("receive-changes", newContent);
+        }
+      } catch (error) {
+        console.error("AI Generation Error:", error);
+      } finally {
+        io.to(documentId).emit("ai-typing", false);
+      }
     });
 
     socket.on("disconnect", () => {

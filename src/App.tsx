@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, ChangeEvent } from "react";
 import { io, Socket } from "socket.io-client";
-import { FileText, Users, Wifi, WifiOff, Plus, Hash } from "lucide-react";
+import { FileText, Users, Wifi, WifiOff, Plus, Hash, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 const DOCUMENTS = ["welcome", "meeting-notes", "project-ideas", "shopping-list"];
@@ -12,6 +12,7 @@ export default function App() {
   const [isConnected, setIsConnected] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState(1);
   const [isSomeoneTyping, setIsSomeoneTyping] = useState(false);
+  const [isAiTyping, setIsAiTyping] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -51,6 +52,10 @@ export default function App() {
       setIsSomeoneTyping(isTyping);
     });
 
+    socket.on("ai-typing", (isTyping: boolean) => {
+      setIsAiTyping(isTyping);
+    });
+
     socket.on("receive-changes", (newContent: string) => {
       // Preserve cursor position if possible
       const textarea = textareaRef.current;
@@ -70,8 +75,17 @@ export default function App() {
     return () => {
       socket.off("load-document");
       socket.off("receive-changes");
+      socket.off("user-count");
+      socket.off("user-typing");
+      socket.off("ai-typing");
     };
   }, [socket, documentId]);
+
+  const handleAiComplete = () => {
+    if (socket && content.trim() !== "" && !isAiTyping) {
+      socket.emit("ai-autocomplete", { documentId, content });
+    }
+  };
 
   const handleContentChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     const newContent = e.target.value;
@@ -125,6 +139,20 @@ export default function App() {
                   <span className="w-1 h-1 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></span>
                 </div>
                 Someone is typing...
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {isAiTyping && (
+              <motion.div
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                className="flex items-center gap-2 text-xs text-purple-600 font-medium bg-purple-50 px-2 py-1 rounded border border-purple-100"
+              >
+                <Sparkles className="w-3.5 h-3.5 animate-pulse" />
+                AI is thinking...
               </motion.div>
             )}
           </AnimatePresence>
@@ -201,14 +229,29 @@ export default function App() {
                 key={documentId}
                 className="flex-1 flex flex-col"
               >
-                <div className="mb-8">
-                  <input
-                    type="text"
-                    value={documentId.replace("-", " ")}
-                    readOnly
-                    className="text-4xl font-bold text-gray-900 bg-transparent border-none focus:outline-none w-full capitalize placeholder-gray-300"
-                  />
-                  <div className="h-1 w-20 bg-blue-500 mt-2 rounded-full"></div>
+                <div className="mb-8 flex items-center justify-between">
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      value={documentId.replace("-", " ")}
+                      readOnly
+                      className="text-4xl font-bold text-gray-900 bg-transparent border-none focus:outline-none w-full capitalize placeholder-gray-300"
+                    />
+                    <div className="h-1 w-20 bg-blue-500 mt-2 rounded-full"></div>
+                  </div>
+                  
+                  <button
+                    onClick={handleAiComplete}
+                    disabled={isAiTyping || content.trim() === ""}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm ${
+                      isAiTyping || content.trim() === ""
+                        ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                        : "bg-purple-600 hover:bg-purple-700 text-white hover:shadow-md"
+                    }`}
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    AI Autocomplete
+                  </button>
                 </div>
 
                 <textarea
